@@ -200,9 +200,16 @@ async function run() {
         currency: "usd",
         payment_method_types: ["card"],
       });
-      res.send({
-        clientSecret: paymentIntent.client_secret,
-      });
+      res.send({ clientSecret: paymentIntent.client_secret });
+    });
+
+    app.get("/payments/:email", verifyToken, async (req, res) => {
+      const query = { email: req.params.email };
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
     });
 
     app.post("/payments", async (req, res) => {
@@ -216,9 +223,51 @@ async function run() {
           $in: payment.cartIds.map((id) => new ObjectId(id)),
         },
       };
-      const deleteResults = await cartCollection.deleteMany(query)
-      res.send({paymentResult, deleteResults});
+      const deleteResults = await cartCollection.deleteMany(query);
+      res.send({ paymentResult, deleteResults });
     });
+
+    //stats or analytics
+    app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      const menuItems = await menuCollection.estimatedDocumentCount();
+      const orders = await paymentCollection.estimatedDocumentCount();
+
+      // //this is not the best way
+      // const payments = await paymentCollection.find().toArray();
+      // const revenue = payments.reduce((total, payment) => total + payment.price, 0);
+
+      const result = await paymentCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalRevenue: {
+                $sum: "$price",
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+
+      res.send({
+        users,
+        menuItems,
+        orders,
+        revenue,
+      });
+    });
+
+    //order status
+    /**
+     * NON Efficient Way
+     * ------------------
+     * 1. load all the payments
+     * 2. for every menuItems (which is an array), go find the item from menu collection
+     * 3. for every item in the menu collection that you found from a payment entry (document)
+     */
 
     await client.db("admin").command({ ping: 1 });
     console.log(

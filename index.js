@@ -262,7 +262,7 @@ async function run() {
 
     //order status
     /**
-     * NON Efficient Way
+     * NOT Efficient Way
      * ------------------
      * 1. load all the payments
      * 2. for every menuItems (which is an array), go find the item from menu collection
@@ -270,16 +270,23 @@ async function run() {
      */
 
     //using aggregate pipeline
-    app.get("/order-stats",verifyToken, verifyAdmin, async (req, res) => {
+    app.get("/order-stats", verifyToken, verifyAdmin, async (req, res) => {
       const result = await paymentCollection
         .aggregate([
           {
             $unwind: "$menuItemIds",
           },
           {
+            $addFields: {
+              menuObjectId: {
+                $toObjectId: "$menuItemIds"
+              }
+            }
+          },
+          {
             $lookup: {
               from: "menu",
-              localField: "menuItemIds",
+               localField: "menuObjectId",
               foreignField: "_id",
               as: "menuItems",
             },
@@ -290,18 +297,18 @@ async function run() {
           {
             $group: {
               _id: "$menuItems.category",
-              quantity: { $sum: 1},
-              revenue: {$sum: '$menuItems.price'}
+              quantity: { $sum: 1 },
+              revenue: { $sum: "$menuItems.price" },
             },
           },
           {
-            $project:{
-              _id:0,
-              category:'$_id',
-              quantity: '$quantity',
-              revenue: '$revenue'
-            }
-          }
+            $project: {
+              _id: 0,
+              category: "$_id",
+              quantity: "$quantity",
+              revenue: "$revenue",
+            },
+          },
         ])
         .toArray();
       res.send(result);

@@ -5,7 +5,14 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEYS);
-const port = process.env.PORT || 9000;
+const port = process.env.PORT || 5000;
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+const mailgun = new Mailgun(formData);
+const mg = mailgun.client({
+  username: "api",
+  key: process.env.MAIL_GUN_API_KEY,
+});
 
 //middleware
 app.use(cors());
@@ -224,6 +231,23 @@ async function run() {
         },
       };
       const deleteResults = await cartCollection.deleteMany(query);
+      // send user email about payment confirmation
+      mg.messages
+        .create(process.env.MAIL_SENDING_DOMAIN, {
+          from: "Excited User <mailgun@sandbox-123.mailgun.org>",
+          to: ["raselparvezsanny@gmail.com"],
+          subject: "Restro Boss order confirmation",
+          text: "Testing some Mailgun awesomeness!",
+          html: ` <div>
+              <h2>Thank you for the order</h2>
+              <h4>
+                Your transaction id: <strong>${payment.transactionId}</strong>
+              </h4>
+              <p>We would like to get your feedback about the food</p>
+            </div>`,
+        })
+        .then((msg) => console.log(msg)) // logs response data
+        .catch((err) => console.log(err));
       res.send({ paymentResult, deleteResults });
     });
 
@@ -279,14 +303,14 @@ async function run() {
           {
             $addFields: {
               menuObjectId: {
-                $toObjectId: "$menuItemIds"
-              }
-            }
+                $toObjectId: "$menuItemIds",
+              },
+            },
           },
           {
             $lookup: {
               from: "menu",
-               localField: "menuObjectId",
+              localField: "menuObjectId",
               foreignField: "_id",
               as: "menuItems",
             },

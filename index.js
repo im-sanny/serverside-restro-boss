@@ -15,6 +15,16 @@ const mg = mailgun.client({
 });
 
 //middleware
+const corsOptions = {
+  origin: [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://restro-boss-serverside.vercel.app",
+  ],
+  credentials: true,
+  optionSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
 app.use(cors());
 app.use(express.json());
 
